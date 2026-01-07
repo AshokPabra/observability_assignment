@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 var tracer = otel.Tracer("user-service/app")
@@ -36,7 +38,17 @@ func CreateUserHandler(w http.ResponseWriter, r *http.Request) {
 func GetUserHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	users, err := getUserList(r.Context())
+
+	span := trace.SpanFromContext(r.Context())
+
+	traceId := span.SpanContext().TraceID().String()
+
+	spanId := span.SpanContext().SpanID().String()
+
+	ctx1 := context.WithValue(r.Context(), "traceId", traceId)
+
+	ctx2 := context.WithValue(ctx1, "spanId", spanId)
+	users, err := getUserList(ctx2)
 
 	err = json.NewEncoder(w).Encode(users)
 	if err != nil {
@@ -67,9 +79,25 @@ func DeleteUserHandler(w http.ResponseWriter, r *http.Request) {
 func getUserList(ctx context.Context) ([]User, error) {
 
 	ctx, span := tracer.Start(ctx, "getUserList")
+	traceId := ctx.Value("traceId").(string)
+	spanId := ctx.Value("spanId").(string)
+
+	spanIdpresent := span.SpanContext().SpanID().String()
+
 	defer span.End()
+	fmt.Println()
+	fmt.Printf("traceId: %s, parent-spanId: %s, spanId: %s", traceId, spanId, spanIdpresent)
+	fmt.Println()
+
+	sleepfunc(ctx)
 
 	list_of_users := users
 	span.SetAttributes(attribute.Int("user.count", len(list_of_users)))
 	return list_of_users, nil
+}
+
+func sleepfunc(ctx context.Context) {
+	ctx, span := tracer.Start(ctx, "getUserList")
+	defer span.End()
+	time.Sleep(5 * time.Microsecond)
 }
