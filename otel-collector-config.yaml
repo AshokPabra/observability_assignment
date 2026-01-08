@@ -10,6 +10,18 @@ receivers:
       http:
         endpoint: 0.0.0.0:4318  # HTTP endpoint
 
+  # Filelog receiver - reads logs from app.log file
+  filelog:
+    include:
+      - /var/log/app/app.log
+    start_at: end
+    operators:
+      # Parse JSON logs
+      - type: json_parser
+        timestamp:
+          parse_from: attributes.timestamp
+          layout: '%Y-%m-%dT%H:%M:%S.%L%z'
+
 processors:
   # Batch processor - batches telemetry data before export
   batch:
@@ -42,5 +54,9 @@ service:
   pipelines:
     traces:
       receivers: [otlp]
+      processors: [batch]
+      exporters: [clickhouse, debug]
+    logs:
+      receivers: [filelog]
       processors: [batch]
       exporters: [clickhouse, debug]

@@ -2,19 +2,43 @@ package logger
 
 import (
 	"context"
+	"os"
 
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 var Log *zap.Logger
 
 func Init() {
-	var err error
-	Log, err = zap.NewProduction()
+	// Create log file
+	file, err := os.OpenFile("app.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	if err != nil {
 		panic(err)
 	}
+
+	// Create encoder config for JSON output
+	encoderConfig := zap.NewProductionEncoderConfig()
+	encoderConfig.TimeKey = "timestamp"
+	encoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
+
+	// Create core that writes to both file and console
+	fileCore := zapcore.NewCore(
+		zapcore.NewJSONEncoder(encoderConfig),
+		zapcore.AddSync(file),
+		zap.InfoLevel,
+	)
+
+	consoleCore := zapcore.NewCore(
+		zapcore.NewJSONEncoder(encoderConfig),
+		zapcore.AddSync(os.Stdout),
+		zap.InfoLevel,
+	)
+
+	// Combine both cores
+	core := zapcore.NewTee(fileCore, consoleCore)
+	Log = zap.New(core)
 }
 
 // WithTraceContext returns a logger with trace_id and span_id
