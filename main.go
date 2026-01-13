@@ -7,11 +7,15 @@ import (
 	"net/http"
 
 	"github.com/AshokPabra/observability_assignment/app"
+	"github.com/AshokPabra/observability_assignment/logger"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel/attribute"
 )
 
 func main() {
+
+	logger.Init()
+	defer logger.Sync()
 
 	tp, err := initTracer()
 	if err != nil {
