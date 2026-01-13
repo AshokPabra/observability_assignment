@@ -61,8 +61,7 @@ service:
       receivers: [filelog]
       processors: [batch]
       exporters: [clickhouse]
-      exporters: [clickhouse, debug]
     metrics:
         receivers: [otlp]
         processors: [batch]
-        exporters: [clickhouse, debug]
+        exporters: [clickhouse]
