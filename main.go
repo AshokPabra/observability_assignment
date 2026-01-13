@@ -31,6 +31,13 @@ func main() {
 
 	fmt.Println("server is started on port :8080")
 
+	http.Handle("/health", otelhttp.NewHandler(
+		http.HandlerFunc(app.HealthCheckHandler),
+		"/health",
+		otelhttp.WithMetricAttributesFn(func(r *http.Request) []attribute.KeyValue {
+			return []attribute.KeyValue{attribute.String("http.route", "/health")}
+		}),
+	))
 	http.Handle("/users", otelhttp.NewHandler(
 		http.HandlerFunc(app.GetUserHandler),
 		"/users",
@@ -50,6 +57,13 @@ func main() {
 		"/delete",
 		otelhttp.WithMetricAttributesFn(func(r *http.Request) []attribute.KeyValue {
 			return []attribute.KeyValue{attribute.String("http.route", "/delete")}
+		}),
+	))
+	http.Handle("/search", otelhttp.NewHandler(
+		http.HandlerFunc(app.SearchUserByEmailHandler),
+		"/search",
+		otelhttp.WithMetricAttributesFn(func(r *http.Request) []attribute.KeyValue {
+			return []attribute.KeyValue{attribute.String("http.route", "/search")}
 		}),
 	))
 

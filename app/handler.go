@@ -6,9 +6,10 @@ import (
 	"fmt"
 	"net/http"
 
+	"time"
+
 	"github.com/AshokPabra/observability_assignment/logger"
 	"go.uber.org/zap"
-	"time"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -18,9 +19,10 @@ import (
 var tracer = otel.Tracer("user-service/app")
 
 type User struct {
-	Id   int    `json:"id"`
-	Name string `json:"name"`
-	Age  int    `json:"age"`
+	Id    int    `json:"id"`
+	Name  string `json:"name"`
+	Age   int    `json:"age"`
+	Email string `json:"email"`
 }
 
 var users []User
@@ -104,9 +106,11 @@ func getUserList(ctx context.Context) ([]User, error) {
 	spanIdpresent := span.SpanContext().SpanID().String()
 
 	defer span.End()
-	fmt.Println()
-	fmt.Printf("traceId: %s, parent-spanId: %s, spanId: %s", traceId, spanId, spanIdpresent)
-	fmt.Println()
+	log := logger.WithTraceContext(ctx)
+	log.Info("getUserList span context",
+		zap.String("traceId", traceId),
+		zap.String("parent_spanId", spanId),
+		zap.String("current_spanId", spanIdpresent))
 
 	sleepfunc(ctx)
 
@@ -119,4 +123,70 @@ func sleepfunc(ctx context.Context) {
 	ctx, span := tracer.Start(ctx, "getUserList")
 	defer span.End()
 	time.Sleep(5 * time.Microsecond)
+}
+
+func SearchUserByEmailHandler(w http.ResponseWriter, r *http.Request) {
+	log := logger.WithTraceContext(r.Context())
+	log.Info("SearchUserByEmailHandler started")
+
+	// Get email from query parameter
+	email := r.URL.Query().Get("email")
+	if email == "" {
+		log.Warn("email parameter is missing")
+		http.Error(w, "email parameter is required", http.StatusBadRequest)
+		return
+	}
+
+	log.Info("searching user by email", zap.String("email", email))
+
+	// Search for user by email
+	_, span := tracer.Start(r.Context(), "searchUserByEmail")
+	defer span.End()
+
+	span.SetAttributes(attribute.String("user.email", email))
+
+	var foundUser *User
+	for _, user := range users {
+		if user.Email == email {
+			foundUser = &user
+			break
+		}
+	}
+
+	if foundUser == nil {
+		log.Info("user not found", zap.String("email", email))
+		http.Error(w, "user not found", http.StatusNotFound)
+		return
+	}
+
+	log.Info("user found successfully", zap.Int("user_id", foundUser.Id), zap.String("email", foundUser.Email))
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	err := json.NewEncoder(w).Encode(foundUser)
+	if err != nil {
+		log.Error("failed to encode user", zap.Error(err))
+		http.Error(w, "error encoding user", http.StatusInternalServerError)
+		return
+	}
+}
+
+func HealthCheckHandler(w http.ResponseWriter, r *http.Request) {
+	log := logger.WithTraceContext(r.Context())
+	log.Info("HealthCheckHandler called")
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	response := map[string]string{
+		"status":  "healthy",
+		"service": "user-service",
+	}
+
+	err := json.NewEncoder(w).Encode(response)
+	if err != nil {
+		log.Error("failed to encode health check response", zap.Error(err))
+		http.Error(w, "error encoding response", http.StatusInternalServerError)
+		return
+	}
 }
