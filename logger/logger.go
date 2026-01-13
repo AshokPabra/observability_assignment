@@ -12,32 +12,19 @@ import (
 var Log *zap.Logger
 
 func Init() {
-	// Create log file
-	file, err := os.OpenFile("app.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
-	if err != nil {
-		panic(err)
-	}
-
 	// Create encoder config for JSON output
 	encoderConfig := zap.NewProductionEncoderConfig()
 	encoderConfig.TimeKey = "timestamp"
 	encoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
 
-	// Create core that writes to both file and console
-	fileCore := zapcore.NewCore(
-		zapcore.NewJSONEncoder(encoderConfig),
-		zapcore.AddSync(file),
-		zap.InfoLevel,
-	)
-
-	consoleCore := zapcore.NewCore(
+	// Create core that writes only to stdout
+	// Docker will capture stdout and write to its JSON log file
+	core := zapcore.NewCore(
 		zapcore.NewJSONEncoder(encoderConfig),
 		zapcore.AddSync(os.Stdout),
 		zap.InfoLevel,
 	)
 
-	// Combine both cores
-	core := zapcore.NewTee(fileCore, consoleCore)
 	Log = zap.New(core)
 }
 
