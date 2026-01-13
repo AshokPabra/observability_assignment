@@ -25,6 +25,7 @@ services:
       - "8080:8080"
     environment:
       - OTEL_EXPORTER_OTLP_ENDPOINT=otel-collector:4317
+      - API_KEY=my-secret-api-key-2026  //we have to pass this api-key in header for authentication
     depends_on:
       - otel-collector
     logging:

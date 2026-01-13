@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 
 	"time"
 
@@ -26,6 +27,45 @@ type User struct {
 }
 
 var users []User
+
+// APIKeyMiddleware validates the API key from request headers
+func APIKeyMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		log := logger.WithTraceContext(r.Context())
+
+		// Get API key from environment variable or use default
+		expectedAPIKey := os.Getenv("API_KEY")
+		if expectedAPIKey == "" {
+			expectedAPIKey = "default-api-key-12345"
+		}
+
+		// Get API key from request header
+		apiKey := r.Header.Get("X-API-Key")
+
+		if apiKey == "" {
+			log.Warn("API key missing in request")
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			json.NewEncoder(w).Encode(map[string]string{
+				"error": "API key is required",
+			})
+			return
+		}
+
+		if apiKey != expectedAPIKey {
+			log.Warn("Invalid API key", zap.String("provided_key", apiKey))
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			json.NewEncoder(w).Encode(map[string]string{
+				"error": "Invalid API key",
+			})
+			return
+		}
+
+		log.Info("API key validated successfully")
+		next.ServeHTTP(w, r)
+	})
+}
 
 func CreateUserHandler(w http.ResponseWriter, r *http.Request) {
 	log := logger.WithTraceContext(r.Context())

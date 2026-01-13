@@ -35,6 +35,43 @@ receivers:
 processors:
   batch:
 
+  # Add environment attribute to all telemetry data
+  attributes:
+    actions:
+      - key: environment
+        value: production
+        action: insert
+      - key: deployment.environment
+        value: production
+        action: insert
+
+  # Redact sensitive data (PII) from spans and attributes
+  redaction:
+    allow_all_keys: false
+    allowed_keys:
+      - http.method
+      - http.status_code
+      - http.route
+      - http.target
+      - service.name
+      - trace_id
+      - span_id
+      - environment
+      - deployment.environment
+    blocked_values:
+      # Redact email patterns
+      - "regex:([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,})"
+      # Redact API keys
+      - "regex:(api[_-]?key[_-]?[=:][a-zA-Z0-9-]+)"
+      - "regex:(X-API-Key:\\s*[a-zA-Z0-9-]+)"
+    summary: debug
+
+  # Filter out health check traces to reduce noise
+  filter/healthcheck:
+    traces:
+      span:
+        - 'attributes["http.route"] == "/health"'
+
 exporters:
   clickhouse:
     endpoint: tcp://host.docker.internal:9000?dial_timeout=10s&compress=lz4
@@ -55,13 +92,16 @@ service:
   pipelines:
     traces:
       receivers: [otlp]
-      processors: [batch]
+      # Processing order: filter first (drop health checks), then add attributes, then redact PII, finally batch
+      processors: [filter/healthcheck, attributes, redaction, batch]
       exporters: [clickhouse]
     logs:
       receivers: [filelog]
-      processors: [batch]
+      # Processing order: add attributes, then redact PII, finally batch
+      processors: [attributes, redaction, batch]
       exporters: [clickhouse]
     metrics:
-        receivers: [otlp]
-        processors: [batch]
-        exporters: [clickhouse]
+      receivers: [otlp]
+      # Processing order: add attributes, then batch
+      processors: [attributes, batch]
+      exporters: [clickhouse]
