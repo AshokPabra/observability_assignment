@@ -6,7 +6,9 @@ import (
 	"os"
 
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.21.0"
@@ -51,4 +53,32 @@ func initTracer() (*sdktrace.TracerProvider, error) {
 	log.Printf("OpenTelemetry tracing initialized (exporting to %s)", collectorEndpoint)
 
 	return tp, nil
+}
+
+func initMeter() (*sdkmetric.MeterProvider, error) {
+	ctx := context.Background()
+
+	collectorEndpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
+	if collectorEndpoint == "" {
+		collectorEndpoint = "localhost:4317"
+	}
+
+	exporter, err := otlpmetricgrpc.New(ctx,
+		otlpmetricgrpc.WithEndpoint(collectorEndpoint),
+		otlpmetricgrpc.WithInsecure(),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	res, _ := resource.New(ctx, resource.WithAttributes(semconv.ServiceName("user-service")))
+
+	mp := sdkmetric.NewMeterProvider(
+		sdkmetric.WithReader(sdkmetric.NewPeriodicReader(exporter)),
+		sdkmetric.WithResource(res),
+	)
+
+	otel.SetMeterProvider(mp)
+	log.Printf("OpenTelemetry metrics initialized")
+	return mp, nil
 }
