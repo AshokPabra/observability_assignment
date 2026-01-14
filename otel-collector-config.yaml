@@ -45,7 +45,8 @@ processors:
         value: production
         action: insert
 
-  # Redact sensitive data (PII) from spans and attributes
+  # Redact sensitive data (PII) from traces only
+  # Note: redaction processor only supports traces, not logs
   redaction:
     allow_all_keys: false
     allowed_keys:
@@ -58,6 +59,7 @@ processors:
       - span_id
       - environment
       - deployment.environment
+      - user.count
     blocked_values:
       # Redact email patterns
       - "regex:([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,})"
@@ -65,6 +67,20 @@ processors:
       - "regex:(api[_-]?key[_-]?[=:][a-zA-Z0-9-]+)"
       - "regex:(X-API-Key:\\s*[a-zA-Z0-9-]+)"
     summary: debug
+
+  # Transform processor for log redaction
+  transform/redact_logs:
+    log_statements:
+      - context: log
+        statements:
+          # Delete email attribute if it exists
+          - delete_key(attributes, "email") where attributes["email"] != nil
+          - delete_key(attributes, "user_email") where attributes["user_email"] != nil
+          # Redact email in body if it's a string
+          - replace_pattern(body, "([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,})", "***REDACTED_EMAIL***") where IsString(body)
+          # Delete API key attributes
+          - delete_key(attributes, "api_key") where attributes["api_key"] != nil
+          - delete_key(attributes, "provided_key") where attributes["provided_key"] != nil
 
   # Filter out health check traces to reduce noise
   filter/healthcheck:
@@ -97,8 +113,8 @@ service:
       exporters: [clickhouse]
     logs:
       receivers: [filelog]
-      # Processing order: add attributes, then redact PII, finally batch
-      processors: [attributes, redaction, batch]
+      # Processing order: add attributes, then redact PII (using transform), finally batch
+      processors: [attributes, transform/redact_logs, batch]
       exporters: [clickhouse]
     metrics:
       receivers: [otlp]

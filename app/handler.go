@@ -36,7 +36,7 @@ func APIKeyMiddleware(next http.Handler) http.Handler {
 		// Get API key from environment variable or use default
 		expectedAPIKey := os.Getenv("API_KEY")
 		if expectedAPIKey == "" {
-			expectedAPIKey = "default-api-key-12345"
+			expectedAPIKey = "my-secret-api-key-2026"
 		}
 
 		// Get API key from request header
